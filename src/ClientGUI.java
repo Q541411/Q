@@ -1,3 +1,4 @@
+// ClientGUI.txt
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -20,10 +21,10 @@ public class ClientGUI {
 
         // 创建组件
         JButton uploadButton = new JButton("上传文件");
-        JButton sendFieldButton = new JButton("保存字段");
+        JButton sendTextButton = new JButton("发送文本");
 
-        JTextField fieldNameField = new JTextField("字段名");
-        JTextField fieldValueField = new JTextField("字段值");
+        JTextField inputField = new JTextField();
+        inputField.setPreferredSize(new Dimension(300, 30));
 
         responseArea = new JTextArea();
         responseArea.setEditable(false);
@@ -32,9 +33,8 @@ public class ClientGUI {
         // 布局
         JPanel panel = new JPanel();
         panel.setLayout(new BorderLayout());
-        panel.add(fieldNameField, BorderLayout.WEST);
-        panel.add(fieldValueField, BorderLayout.CENTER);
-        panel.add(sendFieldButton, BorderLayout.EAST);
+        panel.add(inputField, BorderLayout.CENTER);
+        panel.add(sendTextButton, BorderLayout.EAST);
 
         frame.setLayout(new BorderLayout());
         frame.add(panel, BorderLayout.NORTH);
@@ -42,7 +42,7 @@ public class ClientGUI {
         frame.add(uploadButton, BorderLayout.SOUTH);
 
         // 按钮点击事件
-        sendFieldButton.addActionListener(e -> saveFieldToServer(fieldNameField.getText(), fieldValueField.getText()));
+        sendTextButton.addActionListener(e -> sendMessageToServer(inputField.getText()));
         uploadButton.addActionListener(this::uploadFileToServer);
 
         // 显示窗口
@@ -50,32 +50,29 @@ public class ClientGUI {
     }
 
     /**
-     * 向服务端发送字段数据
+     * 向服务端发送文本消息（Base64编码）
      */
-    private void saveFieldToServer(String fieldName, String fieldValue) {
-        String serverAddress = "localhost";
-        int port = 8080;
+    private void sendMessageToServer(String message) {
+        if (!message.isEmpty()) {
+            String serverAddress = "localhost";
+            int port = 8080;
 
-        try (Socket socket = new Socket(serverAddress, port);
-             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-             PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
+            try (Socket socket = new Socket(serverAddress, port);
+                 PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
 
-            // 发送字段数据到服务端
-            out.println("SAVE_FIELD"); // 指令标识
-            out.println(fieldName); // 字段名
-            out.println(fieldValue); // 字段值
+                // 编码消息并发送
+                String encodedMsg = Base64.getEncoder().encodeToString(message.getBytes());
+                out.println("TEXT|" + encodedMsg);
+                updateResponseArea("已发送消息: " + message);
 
-            // 接收服务端响应
-            String serverResponse = in.readLine();
-            updateResponseArea("服务端响应：" + serverResponse);
-
-        } catch (IOException e) {
-            updateResponseArea("发生错误：" + e.getMessage());
+            } catch (IOException e) {
+                updateResponseArea("发生错误：" + e.getMessage());
+            }
         }
     }
 
     /**
-     * 上传文件到服务端
+     * 上传文件到服务端（Base64编码）
      */
     private void uploadFileToServer(ActionEvent event) {
         JFileChooser fileChooser = new JFileChooser();
@@ -87,21 +84,15 @@ public class ClientGUI {
             int port = 8080;
 
             try (Socket socket = new Socket(serverAddress, port);
-                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                  PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
 
                 // 读取文件内容并编码为Base64
                 byte[] fileContent = readFileContent(selectedFile);
                 String encodedFile = Base64.getEncoder().encodeToString(fileContent);
 
-                // 发送文件名和内容到服务端
-                out.println("UPLOAD_FILE"); // 指令标识
-                out.println(selectedFile.getName()); // 文件名
-                out.println(encodedFile); // 文件内容
-
-                // 接收服务端响应
-                String serverResponse = in.readLine();
-                updateResponseArea("服务端响应：" + serverResponse);
+                // 发送文件信息：类型|文件名|Base64内容
+                out.println("FILE|" + selectedFile.getName() + "|" + encodedFile);
+                updateResponseArea("已上传文件: " + selectedFile.getName());
 
             } catch (IOException e) {
                 updateResponseArea("发生错误：" + e.getMessage());

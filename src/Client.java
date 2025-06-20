@@ -1,8 +1,10 @@
+// Client.txt
 import java.io.*;
 import java.net.Socket;
+import java.util.Base64;
 
 public class Client {
-    private static volatile boolean running = true; // 控制线程运行状态
+    private static volatile boolean running = true;
 
     public static void main(String[] args) {
         String serverAddress = "localhost";
@@ -21,42 +23,43 @@ public class Client {
                     String serverResponse;
                     while ((serverResponse = in.readLine()) != null) {
                         System.out.println("\n[服务端响应]：" + serverResponse);
-                        System.out.print("请输入消息："); // 提示用户继续输入
+                        System.out.print("请输入消息：");
                     }
                 } catch (IOException e) {
-                    if (running) { // 只有在非正常关闭时打印异常
+                    if (running) {
                         System.err.println("工作线程异常：" + e.getMessage());
                     }
                 }
-            }, "Response-Thread"); // 设置线程名称
+            }, "Response-Thread");
             responseThread.start();
 
             // 主线程：处理用户输入
             String userInput;
             while ((userInput = stdIn.readLine()) != null) {
                 if ("sendfile".equalsIgnoreCase(userInput)) {
-                    // 文件传输命令
-                    sendFile(socket);
+                    sendFile(out);
                 } else {
-                    out.println(userInput); // 发送普通消息到服务端
+                    // 普通消息Base64编码
+                    String encodedMsg = Base64.getEncoder().encodeToString(userInput.getBytes());
+                    out.println("TEXT|" + encodedMsg);
                 }
 
                 if ("exit".equalsIgnoreCase(userInput)) {
-                    break; // 输入 "exit" 退出
+                    break;
                 }
             }
 
         } catch (IOException e) {
             System.err.println("客户端异常：" + e.getMessage());
         } finally {
-            running = false; // 停止工作线程
+            running = false;
         }
     }
 
     /**
-     * 发送文件到服务端
+     * 发送文件到服务端（使用Base64编码）
      */
-    private static void sendFile(Socket socket) throws IOException {
+    private static void sendFile(PrintWriter out) throws IOException {
         System.out.print("请输入文件路径：");
         BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
         String filePath = stdIn.readLine();
@@ -67,22 +70,13 @@ public class Client {
             return;
         }
 
-        // 发送文件元信息（文件名和文件大小）
-        OutputStream out = socket.getOutputStream();
-        String fileInfo = "FILE|" + file.getName() + "|" + file.length();
-        out.write((fileInfo + "\n").getBytes()); // 发送文件信息并换行
-        out.flush();
-
-        // 发送文件内容
         try (InputStream fileIn = new FileInputStream(file)) {
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = fileIn.read(buffer)) != -1) {
-                out.write(buffer, 0, bytesRead);
-            }
-            out.flush();
-        }
+            byte[] fileBytes = fileIn.readAllBytes();
+            String encodedFile = Base64.getEncoder().encodeToString(fileBytes);
 
-        System.out.println("文件发送完成：" + file.getName());
+            // 发送文件信息：类型|文件名|Base64内容
+            out.println("FILE|" + file.getName() + "|" + encodedFile);
+            System.out.println("文件发送完成：" + file.getName());
+        }
     }
 }
